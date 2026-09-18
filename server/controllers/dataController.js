@@ -963,7 +963,15 @@ const DRILL_MAPPING = {
         { key: 'offst_acct', header: 'Offset Acct' }, { key: 'material', header: 'Material' },
         { key: 'material_description', header: 'Material Description' }, { key: 'created_on', header: 'Created On' },
         { key: 'user_name', header: 'User Name' }, { key: 'pur_doc', header: 'Pur Doc' },
-        { key: 'purchase_order_text', header: 'Purchase Order Text' }, { key: 'loa_id', header: 'LOA ID' }
+        { key: 'purchase_order_text', header: 'Purchase Order Text' }, { key: 'quantity', header: 'Quantity' },
+    { key: 'name1', header: 'Name1' },
+    { key: 'name22', header: 'Name22' },
+    { key: 'rcurr', header: 'Rcurr' },
+    { key: 'value_trancurr', header: 'Value Trancurr' },
+    { key: 'obcur', header: 'Obcur' },
+    { key: 'val_in_obj_crcy', header: 'Value in Object Currency' },
+    { key: 'name_of_offsetting_account', header: 'Name of Offsetting Account' },
+        { key: 'loa_id', header: 'LOA ID' }
     ],
     oc: [
         { key: 'project_def', header: 'PROJ DEF' }, { key: 'sap_wbs', header: 'WBS' },

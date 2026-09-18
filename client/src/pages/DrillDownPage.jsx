@@ -14,7 +14,12 @@ const CJ74_COLS = [
     { data: 'offst_acct', title: 'Offset Acct' }, { data: 'material', title: 'Material' },
     { data: 'material_description', title: 'Material Description' }, { data: 'created_on', title: 'Created On' },
     { data: 'user_name', title: 'User Name' }, { data: 'pur_doc', title: 'Pur Doc' },
-    { data: 'purchase_order_text', title: 'Purchase Order Text' }, { data: 'loa_id', title: 'LOA ID' }
+    { data: 'purchase_order_text', title: 'Purchase Order Text' },
+    { data: 'quantity', title: 'Quantity' }, { data: 'name1', title: 'Name1' }, { data: 'name22', title: 'Name22' },
+    { data: 'rcurr', title: 'Rcurr' }, { data: 'value_trancurr', title: 'Value Trancurr' },
+    { data: 'obcur', title: 'Obcur' }, { data: 'val_in_obj_crcy', title: 'Value in Object Currency' },
+    { data: 'name_of_offsetting_account', title: 'Name of Offsetting Account' },
+    { data: 'loa_id', title: 'LOA ID' }
 ];
 
 const CJI5_COLS = [
@@ -31,7 +36,7 @@ const CJI5_COLS = [
     { data: 'debit_date', title: 'DEBIT_DATE' }, { data: 'doc_date', title: 'DOC_DATE' },
     { data: 'cocode', title: 'COCODE' }, { data: 'report_currency', title: 'REPORT_CURRENCY' },
     { data: 'tcurr', title: 'TCURR' }, { data: 'value_tcurr', title: 'VALUE TCUR' },
-    { data: 'obj_curr', title: 'OBJ CURR' }, { data: 'value_in_obj_crcy', title: 'VALUE IN OBJ CRCY' },
+    { data: 'obj_curr', title: 'OBJ CURR' }, { data: 'value_in_obj_crcy', title: 'VALUE IN OBJ CRCY' }, { data: 'categories', title: 'Categories' },
     { data: 'loa_id', title: 'LOA ID' }
 ];
 

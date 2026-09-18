@@ -191,6 +191,14 @@ const EXPORT_COLUMNS = {
     { key: 'user_name', header: 'User Name' },
     { key: 'pur_doc', header: 'Pur Doc' },
     { key: 'purchase_order_text', header: 'Purchase Order Text' },
+    { key: 'quantity', header: 'Quantity' },
+    { key: 'name1', header: 'Name1' },
+    { key: 'name22', header: 'Name22' },
+    { key: 'rcurr', header: 'Rcurr' },
+    { key: 'value_trancurr', header: 'Value Trancurr' },
+    { key: 'obcur', header: 'Obcur' },
+    { key: 'val_in_obj_crcy', header: 'Value in Object Currency' },
+    { key: 'name_of_offsetting_account', header: 'Name of Offsetting Account' },
     { key: 'loa_id', header: 'LOA ID' }
 ],
     cji5: [
@@ -223,6 +231,7 @@ const EXPORT_COLUMNS = {
     { key: 'value_tcur', header: 'VALUE_TCUR' },
     { key: 'obj_curr', header: 'OBJ_CURR' },
     { key: 'value_in_obj_crcy', header: 'VALUE_IN_OBJ_CRCY' },
+    { key: 'categories', header: 'Categories' },
     { key: 'loa_id', header: 'LOA ID' }
 ]
 };

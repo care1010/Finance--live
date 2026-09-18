@@ -3,6 +3,117 @@ import axios from 'axios';
 import Swal from 'sweetalert2';
 import { HiOutlinePlus, HiOutlineTrash, HiOutlineTable, HiOutlineClipboard, HiOutlineDocumentDownload, HiOutlineUpload } from "react-icons/hi";
 
+
+const SearchableDropdown = ({
+    options,
+    value,
+    onChange,
+    placeholder,
+    dropdownId,
+    openDropdown,
+    setOpenDropdown
+}) => {
+    const [search, setSearch] = useState('');
+    const [openDirection, setOpenDirection] = useState('down');
+
+    const isOpen = openDropdown === dropdownId;
+
+    const filteredOptions = options.filter(option =>
+        String(option)
+            .toLowerCase()
+            .includes(search.toLowerCase())
+    );
+
+    const handleFocus = (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        // If there is not enough space below,
+        // open the dropdown upward.
+        if (spaceBelow < 250 && spaceAbove > spaceBelow) {
+            setOpenDirection('up');
+        } else {
+            setOpenDirection('down');
+        }
+
+        setOpenDropdown(dropdownId);
+        setSearch('');
+    };
+
+    const handleSelect = (option) => {
+        onChange(option);
+        setSearch('');
+        setOpenDropdown(null);
+    };
+
+    return (
+        <div className="relative w-full z-[100]">
+
+            <input
+                type="text"
+                value={isOpen ? search : value}
+                placeholder={value || placeholder}
+                onFocus={handleFocus}
+                onChange={(e) => {
+                    setSearch(e.target.value);
+                    setOpenDropdown(dropdownId);
+                }}
+                className="w-full p-2 bg-transparent outline-none font-semibold text-slate-700 border-b border-transparent focus:border-blue-400"
+            />
+
+            {isOpen && (
+                <>
+                    {/* Overlay */}
+                    <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => {
+                            setOpenDropdown(null);
+                            setSearch('');
+                        }}
+                    />
+
+                    {/* Dropdown */}
+                    <div
+                        className={`absolute left-0 w-full bg-white border border-slate-200 rounded-xl shadow-2xl z-[9999] overflow-y-auto ${
+                            openDirection === 'up'
+                                ? 'bottom-full mb-5'
+                                : 'top-full mt-1'
+                        }`}
+                        style={{
+                            maxHeight: '250px'
+                        }}
+                    >
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map((option, index) => (
+                                <div
+                                    key={`${option}-${index}`}
+                                    onMouseDown={(e) =>
+                                        e.preventDefault()
+                                    }
+                                    onClick={() =>
+                                        handleSelect(option)
+                                    }
+                                    className="px-3 py-2 cursor-pointer hover:bg-blue-50 text-slate-700 text-sm"
+                                >
+                                    {option}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="px-3 py-3 text-sm text-slate-400">
+                                No results found
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
+
+
+
 const AddProject = ({ user }) => {
     const [mode, setMode] = useState('new'); 
     const [inputMethod, setInputMethod] = useState('paste'); 
@@ -17,6 +128,7 @@ const AddProject = ({ user }) => {
     // 🔥 NEW: States for LOA Dropdowns
     const [loaIdOptions, setLoaIdOptions] = useState([]);
     const [loaNameOptions, setLoaNameOptions] = useState([]);
+    const [openDropdown, setOpenDropdown] = useState(null);
 
     const initialRow = { bd: '', customer: '', loa_id: '', loa_name: '', wbs_type: '', wbs: '', wbs_desc: '' };
     const [gridData, setGridData] = useState([{ ...initialRow }]);
@@ -187,7 +299,7 @@ const AddProject = ({ user }) => {
                     )}
 
                     {inputMethod === 'grid' && (
-                        <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                        <div className="overflow-x-visible rounded-2xl border border-slate-200 shadow-sm">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-slate-100 text-slate-600 font-bold uppercase text-[13px]">
                                     <tr>
@@ -203,7 +315,7 @@ const AddProject = ({ user }) => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                     {gridData.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                                        <tr key={idx} className="hover:bg-blue-50/30 transition-colors relative z-[1]">
                                             {/* 🔥 BU Dropdown */}
                                             <td className="p-1">
                                                 <select className="w-full p-2 bg-transparent outline-none cursor-pointer font-semibold text-slate-700" value={row.bd} onChange={(e) => handleGridChange(idx, 'bd', e.target.value)}>
@@ -226,34 +338,36 @@ const AddProject = ({ user }) => {
                                             </td>
                                             {/* 🔥 LOA ID: Conditional Dropdown */}
                     <td className="p-1">
-                        {mode === 'existing' ? (
-                            <select 
-                                className="w-full p-2 bg-transparent outline-none cursor-pointer font-bold text-blue-600 border-b border-transparent focus:border-blue-400"
-                                value={row.loa_id}
-                                onChange={(e) => handleGridChange(idx, 'loa_id', e.target.value)}
-                            >
-                                <option value="">Select ID</option>
-                                {loaIdOptions.map(id => <option key={id} value={id}>{id}</option>)}
-                            </select>
-                        ) : (
-                            <input className="w-full p-2 bg-transparent outline-none focus:bg-white font-bold text-blue-600 border-b border-transparent focus:border-blue-400" value={row.loa_id} onChange={(e) => handleGridChange(idx, 'loa_id', e.target.value)} placeholder="24.IN.XXXX" />
-                        )}
+{mode === 'existing' ? (
+    <SearchableDropdown
+        options={loaIdOptions}
+        value={row.loa_id}
+        placeholder="Select ID"
+        dropdownId={`loa-id-${idx}`}
+        openDropdown={openDropdown}
+        setOpenDropdown={setOpenDropdown}
+        onChange={(value) =>
+            handleGridChange(idx, 'loa_id', value)
+        }
+    />
+) : (
+    <input
+        className="w-full p-2 bg-transparent outline-none focus:bg-white font-bold text-blue-600 border-b border-transparent focus:border-blue-400"
+        value={row.loa_id}
+        onChange={(e) =>
+            handleGridChange(idx, 'loa_id', e.target.value)
+        }
+        placeholder="24.IN.XXXX"
+    />
+)}
+
+
                     </td>
 
                     {/* 🔥 LOA NAME: Conditional Dropdown */}
                     <td className="p-1">
-                        {mode === 'existing' ? (
-                            <select 
-                                className="w-full p-2 bg-transparent outline-none cursor-pointer text-slate-700 border-b border-transparent focus:border-blue-400"
-                                value={row.loa_name}
-                                onChange={(e) => handleGridChange(idx, 'loa_name', e.target.value)}
-                            >
-                                <option value="">Select Project</option>
-                                {loaNameOptions.map(name => <option key={name} value={name}>{name}</option>)}
-                            </select>
-                        ) : (
-                            <input className="w-full p-2 bg-transparent outline-none focus:bg-white" value={row.loa_name} onChange={(e) => handleGridChange(idx, 'loa_name', e.target.value)} placeholder="Project XYZ" />
-                        )}
+{mode === 'existing' ? ( <SearchableDropdown options={loaNameOptions} value={row.loa_name} placeholder="Select Project" dropdownId={`project-name-${idx}`} openDropdown={openDropdown} setOpenDropdown={setOpenDropdown} onChange={(value) => handleGridChange(idx, 'loa_name', value) } /> ) : ( <input className="w-full p-2 bg-transparent outline-none focus:bg-white" value={row.loa_name} onChange={(e) => handleGridChange(idx, 'loa_name', e.target.value )} placeholder="Project XYZ" /> )}
+
                     </td>
                                             <td className="p-1">
                                                 <select className="w-full p-2 bg-transparent outline-none cursor-pointer" value={row.wbs_type} onChange={(e) => handleGridChange(idx, 'wbs_type', e.target.value)}>
