@@ -399,7 +399,7 @@ const sendPTDReminderAlert = async (recipientEmails, periodCode) => {
         <div style="font-family: Calibri, Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;">
             <p>Dear Team,</p>
             <p>This is a reminder that the PTD for <strong>${periodCode}</strong> was updated 7 days ago.</p>
-            <p>Please ensure you provide the forecast data to complete cost by <strong>${deadlineDate}</strong>.</p>
+            <p>Please ensure you provide the forecast data to complete cost by <strong>End of Day</strong>.</p>
             <div style="text-align:center; margin:35px 0;">
                     <a href="${TOOL_LINK}" style="background:#124191; color:#ffffff; padding:14px 40px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block; font-size:16px;">
                         Login to Tool

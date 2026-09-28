@@ -5,7 +5,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 const CJ74_COLS = [
     { data: 'sap_wbs', title: 'WBS' }, { data: 'year', title: 'Year' }, { data: 'per', title: 'Per' },
-    { data: 'cost_element', title: 'Cost Element' }, { data: 'cost_element_name', title: 'Cost Element Name' },
+    { data: 'raw_cost_element', title: 'Cost Element' },
+    { data: 'cost_element_name', title: 'Cost Element Name' },
     { data: 'ptd_val', title: 'PTD VAL (K€)', className: 'text-right' }, { data: 'period', title: 'Period' },
     { data: 'cocd', title: 'CoCd' }, { data: 'proj_def', title: 'Project Def' }, { data: 'profit_ctr', title: 'Profit Ctr' },
     { data: 'tcurr', title: 'T Curr' }, { data: 'cost_element_descr', title: 'COST ELEMENT DESCR' },
@@ -28,7 +29,8 @@ const CJI5_COLS = [
     { data: 'item', title: 'ITEM' }, { data: 'co_object_name', title: 'CO_OBJECT_NAME' },
     { data: 'supplier', title: 'SUPPLIER' }, { data: 'name', title: 'NAME' },
     { data: 'exch_rate', title: 'EXCH_RATE' }, { data: 'year', title: 'YEAR' },
-    { data: 'per', title: 'PER' }, { data: 'period', title: 'Period' }, { data: 'cost_element', title: 'COST_ELEMENT' },
+    { data: 'per', title: 'PER' },
+    { data: 'raw_cost_element', title: 'Cost Element' },
     { data: 'cost_element_descr', title: 'COST_ELEMENT_DESCR' }, { data: 'matl_group', title: 'MATL GROUP' },
     { data: 'material', title: 'MATERIAL' }, { data: 'description', title: 'DESCRIPTION' },
     { data: 'user_name', title: 'USER_NAME' }, { data: 'docc', title: 'DOCC' },
@@ -162,7 +164,7 @@ const DrillDownPage = () => {
                             {isPTD ? '📈' : '⏳'}
                         </div>
                         <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">
-                            {isPTD ? 'PTD Details' : 'Commitment Details'}
+                            {isPTD ? 'PTD Details' : 'Open Commitment Details'}
                         </h1>
                     </div>
 

@@ -831,7 +831,7 @@ exports.syncDrilldownTables = async () => {
         await db.query("TRUNCATE TABLE t_cj74_transformed");
         await db.query(`
             INSERT INTO t_cj74_transformed (
-                id, sap_wbs, year, per, cost_element, cost_element_name, ptd_val, period, cocd, proj_def, 
+                id, sap_wbs, year, per, cost_element, raw_cost_element, cost_element_name, ptd_val, period, cocd, proj_def, 
                 profit_ctr, name2, tcurr, value_trancurr, obcur, val_in_obj_crcy, val_in_rc, rcurr, 
                 cost_element_descr, refdocno, document_no, doc_date, postg_date, offst_acct, 
                 name_of_offsetting_account, material, material_description, name1, name22, created_on, 
@@ -843,7 +843,7 @@ exports.syncDrilldownTables = async () => {
                 TRIM(REPLACE(REPLACE(REPLACE(c.object_1, ' ', ''), CHR(10), ''), CHR(13), '')) AS sap_wbs, 
                 c.year, 
                 CASE WHEN TRIM(c.per::text) ~ '^[0-9]+$' THEN CAST(TRIM(c.per::text) AS INTEGER) ELSE NULL END AS per, 
-                c.cost_element, c.cost_element_name, 
+                c.cost_element, c.raw_cost_element, c.cost_element_name, 
                 CAST(COALESCE(c.val_in_rc, 0) AS NUMERIC(15,2)) / 1000 AS ptd_val, 
                 TRIM(CONCAT(c.year, '-P', LPAD(CASE WHEN TRIM(c.per::text) ~ '^[0-9]+$' THEN TRIM(c.per::text) ELSE '0' END, 3, '0'))) AS period, 
                 c.cocd, c.proj_def, c.profit_ctr, c.name2, c.tcurr, c.value_trancurr, c.obcur, 
@@ -869,7 +869,7 @@ exports.syncDrilldownTables = async () => {
             INSERT INTO t_cji5_transformed (
                 id, project_def, sap_wbs, refdocno, item, co_object_name, supplier, name, exch_rate, 
                 year, per, period, -- 🔥 Added period column here
-                cost_element, cost_element_descr, matl_group, material, description, 
+                cost_element, raw_cost_element, cost_element_descr, matl_group, material, description, 
                 user_name, docc, quantity, qty_plan, debit_date, doc_date, cocode, report_currency, 
                 val_in_rep_cur, tcurr, value_tcur, obj_curr, value_in_obj_crcy, oc_val, loa_id, wbs_type, categories
             )
@@ -882,7 +882,7 @@ exports.syncDrilldownTables = async () => {
                     THEN '${lrp}'
                     ELSE TRIM(CONCAT(c.year, '-P', LPAD(c.per::text, 3, '0')))
                 END AS period,
-                c.cost_element, 
+                c.cost_element, c.raw_cost_element,
                 c.cost_element_descr, c.matl_group, c.material, c.description, c.user_name, c.docc, 
                 c.quantity, c.qty_plan, c.debit_date, c.doc_date, c.cocode, c.report_currency, 
                 c.val_in_rep_cur, c.tcurr, c.value_tcur, c.obj_curr, c.value_in_obj_crcy, 
@@ -954,7 +954,8 @@ const buildDrilldownConditions = (filters, tableName) => {
 const DRILL_MAPPING = {
     ptd: [
         { key: 'sap_wbs', header: 'WBS' }, { key: 'year', header: 'Year' }, { key: 'per', header: 'Per' },
-        { key: 'cost_element', header: 'Cost Element' }, { key: 'cost_element_name', header: 'Cost Element Name' },
+        { key: 'raw_cost_element', header: 'Cost Element' },
+        { key: 'cost_element_name', header: 'Cost Element Name' },
         { key: 'ptd_val', header: 'PTD VAL (K€)' }, { key: 'period', header: 'Period' }, { key: 'cocd', header: 'CoCd' },
         { key: 'proj_def', header: 'Project Def' }, { key: 'profit_ctr', header: 'Profit Ctr' },
         { key: 'tcurr', header: 'T Curr' }, { key: 'cost_element_descr', header: 'COST ELEMENT DESCR' },
@@ -964,13 +965,13 @@ const DRILL_MAPPING = {
         { key: 'material_description', header: 'Material Description' }, { key: 'created_on', header: 'Created On' },
         { key: 'user_name', header: 'User Name' }, { key: 'pur_doc', header: 'Pur Doc' },
         { key: 'purchase_order_text', header: 'Purchase Order Text' }, { key: 'quantity', header: 'Quantity' },
-    { key: 'name1', header: 'Name1' },
-    { key: 'name22', header: 'Name22' },
-    { key: 'rcurr', header: 'Rcurr' },
-    { key: 'value_trancurr', header: 'Value Trancurr' },
-    { key: 'obcur', header: 'Obcur' },
-    { key: 'val_in_obj_crcy', header: 'Value in Object Currency' },
-    { key: 'name_of_offsetting_account', header: 'Name of Offsetting Account' },
+        { key: 'name1', header: 'Name1' },
+        { key: 'name22', header: 'Name22' },
+        { key: 'rcurr', header: 'Rcurr' },
+        { key: 'value_trancurr', header: 'Value Trancurr' },
+        { key: 'obcur', header: 'Obcur' },
+        { key: 'val_in_obj_crcy', header: 'Value in Object Currency' },
+        { key: 'name_of_offsetting_account', header: 'Name of Offsetting Account' },
         { key: 'loa_id', header: 'LOA ID' }
     ],
     oc: [
@@ -979,7 +980,8 @@ const DRILL_MAPPING = {
         { key: 'item', header: 'ITEM' }, { key: 'co_object_name', header: 'CO_OBJECT_NAME' },
         { key: 'supplier', header: 'SUPPLIER' }, { key: 'name', header: 'NAME' },
         { key: 'exch_rate', header: 'EXCH_RATE' }, { key: 'year', header: 'YEAR' },
-        { key: 'per', header: 'PER' }, { key: 'cost_element', header: 'COST_ELEMENT' },
+        { key: 'per', header: 'PER' }, 
+        { key: 'raw_cost_element', header: 'Cost Element' }, // 🔥 Naya added
         { key: 'cost_element_descr', header: 'COST_ELEMENT_DESCR' }, { key: 'matl_group', header: 'MATL GROUP' },
         { key: 'material', header: 'MATERIAL' }, { key: 'description', header: 'DESCRIPTION' },
         { key: 'user_name', header: 'USER_NAME' }, { key: 'docc', header: 'DOCC' },
@@ -988,6 +990,7 @@ const DRILL_MAPPING = {
         { key: 'cocode', header: 'COCODE' }, { key: 'report_currency', header: 'REPORT_CURRENCY' },
         { key: 'tcurr', header: 'TCURR' }, { key: 'value_tcur', header: 'VALUE TCUR' },
         { key: 'obj_curr', header: 'OBJ CURR' }, { key: 'value_in_obj_crcy', header: 'VALUE IN OBJ CRCY' },
+        { key: 'categories', header: 'Categories' },
         { key: 'loa_id', header: 'LOA ID' }
     ]
 };
