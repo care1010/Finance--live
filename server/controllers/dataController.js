@@ -789,6 +789,39 @@ exports.runFullSyncCore = async () => {
             await connection.query(finalInsertSql);
             await connection.commit();
             console.log("✨ [STEP 3/3]: Dashboard update complete!");
+
+            // 🔥 NAYA: Missing Cost Elements ko Audit Table mein bharo
+            console.log("🔍 [Logs:]: Missing cost mappings start checking...");
+            
+            // 1. Purani list saaf karo
+            await connection.query("TRUNCATE TABLE missing_cost_elements_audit");
+            
+            // 2. Nayi list insert karo
+            await connection.query(`
+                INSERT INTO missing_cost_elements_audit (loa_id, loa_name, raw_cost_element, source_table)
+                
+                -- CJ74 se missing elements uthao
+                SELECT DISTINCT loa_id, loa_name, raw_cost_element, 'CJ74'
+                FROM cj74_new c
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM cost_mapping cm 
+                    WHERE TRIM(cm.cost_element) = TRIM(c.raw_cost_element)
+                )
+                AND raw_cost_element IS NOT NULL AND raw_cost_element <> ''
+                
+                UNION
+                
+                -- CJI5 se missing elements uthao
+                SELECT DISTINCT loa_id, project_def as loa_name, raw_cost_element, 'CJI5'
+                FROM cji5_new ci
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM cost_mapping cm 
+                    WHERE TRIM(cm.cost_element) = TRIM(ci.raw_cost_element)
+                )
+                AND raw_cost_element IS NOT NULL AND raw_cost_element <> ''
+            `);
+            console.log("✅ [Logs:]: Missing Cost elements stored successfully from CJI5, CJ74.");
+
         } catch (innerError) {
             await connection.rollback();
             throw innerError;

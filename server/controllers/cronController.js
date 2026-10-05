@@ -444,6 +444,43 @@ exports.triggerManualSync = async (req, res) => {
 };
 
 
+// 🔥 NEW: Missing CE Audit Mailer Function
+const runMissingCEAuditMailer = async () => {
+    console.log("\n📧 [MAILER]: Missing Cost Element check shuru...");
+    try {
+        const [rows] = await db.query("SELECT loa_id, loa_name, raw_cost_element, source_table FROM missing_cost_elements_audit");
+        
+        if (rows.length === 0) {
+            console.log("✅ [MAILER]: Saari mapping sahi hai. Mail skip kar rahe hain.");
+            return;
+        }
+
+        // Create Excel Attachment
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Missing Elements');
+        sheet.columns = [
+            { header: 'LOA ID', key: 'loa_id', width: 15 },
+            { header: 'LOA Name', key: 'loa_name', width: 40 },
+            { header: 'Raw Cost Element', key: 'raw_cost_element', width: 20 },
+            { header: 'Source Table', key: 'source_table', width: 15 }
+        ];
+        rows.forEach(r => sheet.addRow(r));
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        // Get Super Admin Emails
+        const [admins] = await db.query("SELECT email FROM users WHERE type = 'admin' AND is_active = '1'");
+        const adminEmails = admins.map(a => a.email);
+
+        if (adminEmails.length > 0) {
+            await mailService.sendMissingCEMail(adminEmails, buffer);
+            console.log(`✅ [MAILER]: Missing CE mail sent to: ${adminEmails.join(', ')}`);
+        }
+    } catch (err) {
+        console.error("❌ [MAILER ERROR]:", err.message);
+    }
+};
+
+
 exports.triggerAutoSync = (source) => {
     if (autoSyncTimeout) clearTimeout(autoSyncTimeout);
     
@@ -452,6 +489,12 @@ exports.triggerAutoSync = (source) => {
     
     autoSyncTimeout = setTimeout(() => {
         runSync(`auto_trigger_${source}`); // FIXED
+
+        // 🔥 NEW: Agar PTD upload hua hai toh 5 minute (300,000 ms) baad mail trigger karo
+        if (source === 'ptd_uploaded') {
+            console.log("⏱️ [SCHEDULED]: Missing CE Audit Mail 5 minute mein bheja jayega...");
+            setTimeout(runMissingCEAuditMailer, 300000); 
+        }
     }, 15000); 
 };
 

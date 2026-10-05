@@ -87,8 +87,6 @@ const sendAccessRequestMail = async (request) => {
 
                 </div>
 
-
-
                 <p style="margin-top:25px;">Best Regards,<br><strong>NI INDIA PMO Team</strong></p>
 
             </div>
@@ -151,8 +149,6 @@ const sendApprovalMail = async (request) => {
                     </a>
 
                 </div>
-
-
 
                 <table style="width:100%; border-collapse:collapse; margin-top:20px;">
 
@@ -313,7 +309,8 @@ const sendCustomerUtilizationAlert = async (recipients, customerName, alertsList
             
             <div style="padding:30px; color:#333333;">
                 <p style="font-size: 16px;">Dear Team,</p>
-                <p>Cost data for <strong>${customerName}</strong> have exceeded the cost in the following categories:</p>
+                <p>below projects need your attention is either PTD reached 80% of ASBL or EAC is more than ASBL.<br>
+                Please check and update along with cost optimization plan.</p>
                
                 <table style="width:100%; margin:25px 0; border-collapse:collapse; border: 1px solid #e0e0e0;">
                     <thead style="background:#f4f7fa;">
@@ -363,12 +360,12 @@ const sendPTDUpdateAlert = async (recipientEmails, periodCode) => {
         to: recipientEmails,
         cc: ["shraddha.dubey@nokia.com", "neha.sain.ext@nokia.com", "mohsin.1.khan.ext@nokia.com"], // As per your latest code
         bcc: "care.ni_india@nokia.com",
-        subject: `NOTIFICATION: Non Committed for ${periodCode} Updated - NI INDIA Financial Cost Tracker`,
+        subject: `NOTIFICATION: To update Non-Committed Cost ${periodCode} - NI INDIA Financial Cost Tracker`,
         html: `
         <div style="font-family: Calibri, Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;">
             <p>Dear Team,</p>
             <p>PTD for <strong>${periodCode}</strong> has been updated in NI INDIA Financial Cost Tracker.
-               Please check and provide forecast data (Non Committed) to complete cost by <strong>${deadlineDate}</strong>.
+               Please check and provide forecast (Non Committed) to complete cost by <strong>next 3 days</strong>.
             </p>
             <div style="text-align:center; margin:35px 0;">
                 <a href="${TOOL_LINK}" style="background:#124191; color:#ffffff; padding:14px 40px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block; font-size:16px;">
@@ -394,21 +391,18 @@ const sendPTDReminderAlert = async (recipientEmails, periodCode) => {
         to: recipientEmails, 
         cc: ["neha.sain.ext@nokia.com", "shraddha.dubey@nokia.com", "mohsin.1.khan.ext@nokia.com"], // Testing ke liye rakha hai
         bcc: "care.ni_india@nokia.com",
-        subject: `⚠️ REMINDER: PTD for ${periodCode} Action Required`,
+        subject: `⚠️ REMINDER: To update Non-Committed Cost ${periodCode} - NI INDIA Financial Cost Tracker`,
         html: `
         <div style="font-family: Calibri, Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;">
             <p>Dear Team,</p>
-            <p>This is a reminder that the PTD for <strong>${periodCode}</strong> was updated 7 days ago.</p>
-            <p>Please ensure you provide the forecast data to complete cost by <strong>End of Day</strong>.</p>
+            <p>This is a reminder that the PTD for <strong>${periodCode}</strong> was updated 5 days ago.</p>
+            <p>Please ensure you provide the forecast to complete cost by the <strong>End of Day</strong>.</p>
             <div style="text-align:center; margin:35px 0;">
                     <a href="${TOOL_LINK}" style="background:#124191; color:#ffffff; padding:14px 40px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block; font-size:16px;">
                         Login to Tool
                     </a>
             </div>
             <p>Best Regards,<br><strong>NI INDIA PMO Team</strong></p>
-            <div style="margin-top: 20px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 10px;">
-                Note: This reminder is sent only to Nokia internal employees.
-            </div>
         </div>`
     };
     return transporter.sendMail(mailOptions);
@@ -486,6 +480,48 @@ const sendPendingLoaAuditMail = async (adminEmails, excelBuffer, monthYear) => {
     return transporter.sendMail(mailOptions);
 };
 
+// first mail (after 5 minutes of ptd/OC upload) to all admins with missing cost elements
+const sendMissingCEMail = async (adminEmails, excelBuffer) => {
+    const mailOptions = {
+        from: '"NI INDIA Cost Tracker" <care.ni_india@nokia.com>',
+        to: adminEmails,
+        cc: ["neha.sain.ext@nokia.com"],
+        subject: "Missing Cost Elements from PTD/OC",
+        html: `
+            <div style="font-family: Calibri, sans-serif; font-size: 15px; color: #333;">
+                <p>Dear Team,</p>
+                <p>Below projects need your attention as <strong>Cost Element Mapping</strong> is not available for some entries in the latest PTD/OC upload.</p>
+                <p>Please refer to the attached Excel file for the complete list of missing cost mappings.</p>
+                <br/>
+                <p>Best Regards,<br/><strong>NI INDIA PMO Team</strong></p>
+            </div>
+        `,
+        attachments: [{ filename: 'Missing_Cost_Elements_Report.xlsx', content: excelBuffer }]
+    };
+    return transporter.sendMail(mailOptions);
+};
+
+// 🔥 New: Reminder Mail (after 5 days of first mail)
+const sendMissingCEReminderMail = async (adminEmails, excelBuffer) => {
+    const mailOptions = {
+        from: '"NI INDIA Cost Tracker" <care.ni_india@nokia.com>',
+        to: adminEmails,
+        cc: ["neha.sain.ext@nokia.com"],
+        subject: "⚠️ REMINDER: Missing Cost Elements from PTD/OC",
+        html: `
+            <div style="font-family: Calibri, sans-serif; font-size: 15px; color: #333;">
+                <p>Dear Team,</p>
+                <p>This is a <strong>Reminder</strong> regarding the projects mentioned below where Cost Element Mapping is still not available.</p>
+                <p>Please take immediate action to update the cost mapping.</p>
+                <br/>
+                <p>Regards,<br/><strong>NI INDIA PMO Team</strong></p>
+            </div>
+        `,
+        attachments: [{ filename: 'REMINDER_Missing_Cost_Elements.xlsx', content: excelBuffer }]
+    };
+    return transporter.sendMail(mailOptions);
+};
+
 
 module.exports = {
 
@@ -505,6 +541,10 @@ module.exports = {
 
     sendPTDReminderAlert,
 
-    sendPendingLoaAuditMail
+    sendPendingLoaAuditMail,
+
+    sendMissingCEMail,
+
+    sendMissingCEReminderMail
 
 };
