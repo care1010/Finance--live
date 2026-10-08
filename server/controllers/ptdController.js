@@ -168,3 +168,62 @@ exports.uploadPtdData = async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 };
+
+
+// 🔥 NAYA: Add New Cost Mapping from UI
+exports.getMappingOptions = async (req, res) => {
+    try {
+        const [catRows] = await db.query("SELECT DISTINCT categories FROM cost_mapping WHERE categories IS NOT NULL ORDER BY categories ASC");
+        const [revRows] = await db.query("SELECT DISTINCT cost_revenue FROM cost_mapping WHERE cost_revenue IS NOT NULL ORDER BY cost_revenue ASC");
+        
+        res.json({
+            categories: catRows.map(r => r.categories),
+            types: revRows.map(r => r.cost_revenue)
+        });
+    } catch (error) { 
+        res.status(500).json({ error: error.message }); 
+    }
+};
+
+// 🔥 API 2: Add New Cost Mapping (All fields included)
+exports.addCostMapping = async (req, res) => {
+    try {
+        const { cost_element, cost_element_name, cost_revenue, categories, category, cost_element_group_name, cost_element_desc } = req.body;
+
+        if (!cost_element || !categories || !cost_revenue) {
+            return res.status(400).json({ error: "Required fields are missing." });
+        }
+
+        const cleanCE = String(cost_element).trim();
+
+        const sql = `
+            INSERT INTO cost_mapping 
+            (category, cost_element_group_name, cost_element, cost_element_name, cost_element_desc, cost_revenue, categories) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        await db.query(sql, [
+            category || 'Other',
+            cost_element_group_name || '',
+            cleanCE,
+            cost_element_name || '',
+            cost_element_desc || '',
+            cost_revenue,
+            categories
+        ]);
+
+        return res.status(200).json({ message: "New mapping added successfully!" });
+
+    } catch (error) {
+        // 🔥 Catch Postgres Unique Violation
+        if (error.code === '23505' || error.message.includes('unique_cost_element')) {
+            return res.status(409).json({ 
+                isDuplicate: true, 
+                message: `Cost Element [${req.body.cost_element}] is already mapped in the database.` 
+            });
+        }
+        
+        console.error("Mapping Error:", error.message);
+        return res.status(500).json({ error: "Internal Server Error. Please try again later." });
+    }
+};

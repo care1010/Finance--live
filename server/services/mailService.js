@@ -13,7 +13,7 @@ const sendAccessRequestMail = async (request) => {
 
         from: '"NI INDIA Financial Cost Tracker" <care.ni_india@nokia.com>',
 
-        to: ["shraddha.dubey@nokia.com", "neha.sain.ext@nokia.com", "mohsin.1.khan.ext@nokia.com"],
+        to: ["neha.sain.ext@nokia.com"],
 
         bcc: "care.ni_india@nokia.com",
 
@@ -115,7 +115,7 @@ const sendApprovalMail = async (request) => {
 
         to: request.email,
 
-        cc: ["neha.sain.ext@nokia.com", "shraddha.dubey@nokia.com", "mohsin.1.khan.ext@nokia.com"],
+        cc: ["neha.sain.ext@nokia.com"],
         bcc: "care.ni_india@nokia.com",
 
         subject: `Access Approved - NI INDIA Financial Cost Tracker`,
@@ -192,7 +192,7 @@ const sendDeclineMail = async (request) => {
 
         to: request.email,
 
-        cc: ["neha.sain.ext@nokia.com", "shraddha.dubey@nokia.com", "mohsin.1.khan.ext@nokia.com"],
+        cc: ["neha.sain.ext@nokia.com"],
         bcc: "care.ni_india@nokia.com",
 
         subject: `Access Request Update - NI INDIA Financial Cost Tracker`,
@@ -297,7 +297,7 @@ const sendCustomerUtilizationAlert = async (recipients, customerName, alertsList
     const mailOptions = {
         from: '"NI INDIA Cost Tracker Alert" <care.ni_india@nokia.com>',
         to: recipients,
-        cc: ["neha.sain.ext@nokia.com", "shraddha.dubey@nokia.com", "mohsin.1.khan.ext@nokia.com"],
+        cc: ["neha.sain.ext@nokia.com"],
         bcc: "care.ni_india@nokia.com",
         subject: `⚠️ Action Required: PTD UTIL % || EAC vs ASBL % - ${customerName}`,
         html: `
@@ -358,7 +358,7 @@ const sendPTDUpdateAlert = async (recipientEmails, periodCode) => {
     const mailOptions = {
         from: '"NI INDIA Financial Cost Tracker" <care.ni_india@nokia.com>',
         to: recipientEmails,
-        cc: ["shraddha.dubey@nokia.com", "neha.sain.ext@nokia.com", "mohsin.1.khan.ext@nokia.com"], // As per your latest code
+        cc: ["neha.sain.ext@nokia.com"], // As per your latest code
         bcc: "care.ni_india@nokia.com",
         subject: `NOTIFICATION: To update Non-Committed Cost ${periodCode} - NI INDIA Financial Cost Tracker`,
         html: `
@@ -389,7 +389,7 @@ const sendPTDReminderAlert = async (recipientEmails, periodCode) => {
         from: '"NI INDIA Financial Cost Tracker" <care.ni_india@nokia.com>',
         // 🔥 TO: Ab ye dynamic filtered list receive karega
         to: recipientEmails, 
-        cc: ["neha.sain.ext@nokia.com", "shraddha.dubey@nokia.com", "mohsin.1.khan.ext@nokia.com"], // Testing ke liye rakha hai
+        cc: ["neha.sain.ext@nokia.com"], // Testing ke liye rakha hai
         bcc: "care.ni_india@nokia.com",
         subject: `⚠️ REMINDER: To update Non-Committed Cost ${periodCode} - NI INDIA Financial Cost Tracker`,
         html: `
@@ -408,13 +408,13 @@ const sendPTDReminderAlert = async (recipientEmails, periodCode) => {
     return transporter.sendMail(mailOptions);
 };
 
-// 🔥 NAYA: Monthly Project Audit Mailer with Excel Attachment
+// 🔥 Last Month Added WBS List
 const sendMonthlyProjectAuditMail = async (adminEmails, excelBuffer, monthName) => {
     const mailOptions = {
         from: '"NI INDIA Financial Cost Tracker" <care.ni_india@nokia.com>',
         // to: adminEmails, // List of all admins
         // 🔥 TESTING OVERRIDE: Sending only to Neha
-        to: ["shraddha.dubey@nokia.com", "neha.sain.ext@nokia.com", "mohsin.1.khan.ext@nokia.com"], 
+        to: ["neha.sain.ext@nokia.com"], 
         bcc: "care.ni_india@nokia.com",
         subject: `Last Month Added WBS List: New WBS Elements Added - ${monthName}`,
         html: `
@@ -447,12 +447,12 @@ const sendMonthlyProjectAuditMail = async (adminEmails, excelBuffer, monthName) 
     return transporter.sendMail(mailOptions);
 };
 
-// 🔥 NAYA: Pending LOA Audit Mailer with Excel Attachment
+// 🔥 Action Required: Pending Loa names List with no Non Commited inputs
 const sendPendingLoaAuditMail = async (adminEmails, excelBuffer, monthYear) => {
     const mailOptions = {
         from: '"Financial Cost Tracker Audit" <care.ni_india@nokia.com>',
         // to: adminEmails, // Array of admins
-        to: ["shraddha.dubey@nokia.com", "neha.sain.ext@nokia.com", "mohsin.1.khan.ext@nokia.com"],
+        to: ["neha.sain.ext@nokia.com"],
         cc: ["neha.sain.ext@nokia.com"], // 🔥 Required CC
         bcc: "care.ni_india@nokia.com",
         subject: `⚠️ Action Required: Pending Loa names List with no Non Commited inputs - ${monthYear}`,
@@ -486,12 +486,12 @@ const sendMissingCEMail = async (adminEmails, excelBuffer) => {
         from: '"NI INDIA Cost Tracker" <care.ni_india@nokia.com>',
         to: adminEmails,
         cc: ["neha.sain.ext@nokia.com"],
-        subject: "Missing Cost Elements from PTD/OC",
+        subject: "⚠️ Missing Cost Elements from PTD/OC",
         html: `
             <div style="font-family: Calibri, sans-serif; font-size: 15px; color: #333;">
                 <p>Dear Team,</p>
-                <p>Below projects need your attention as <strong>Cost Element Mapping</strong> is not available for some entries in the latest PTD/OC upload.</p>
-                <p>Please refer to the attached Excel file for the complete list of missing cost mappings.</p>
+                <p>Below projects need your attention as <strong>Cost Element Mapping</strong> is not available.</p>
+
                 <br/>
                 <p>Best Regards,<br/><strong>NI INDIA PMO Team</strong></p>
             </div>
@@ -511,13 +511,35 @@ const sendMissingCEReminderMail = async (adminEmails, excelBuffer) => {
         html: `
             <div style="font-family: Calibri, sans-serif; font-size: 15px; color: #333;">
                 <p>Dear Team,</p>
-                <p>This is a <strong>Reminder</strong> regarding the projects mentioned below where Cost Element Mapping is still not available.</p>
+                <p>Below projects need your attention as <strong>Cost Element Mapping</strong> is not available.</p>
                 <p>Please take immediate action to update the cost mapping.</p>
                 <br/>
                 <p>Regards,<br/><strong>NI INDIA PMO Team</strong></p>
             </div>
         `,
         attachments: [{ filename: 'REMINDER_Missing_Cost_Elements.xlsx', content: excelBuffer }]
+    };
+    return transporter.sendMail(mailOptions);
+};
+
+
+// 🔥 NAYA: Missing ASBL Notification Mailer
+const sendMissingAsblAlert = async (recipientEmails, attachmentsList) => {
+    const mailOptions = {
+        from: '"NI INDIA Cost Tracker" <care.ni_india@nokia.com>',
+        to: recipientEmails,
+        cc: ["neha.sain.ext@nokia.com"],
+        subject: "⚠️ Missing ASBL data in Financial Cost Tracker",
+        html: `
+            <div style="font-family: Calibri, sans-serif; font-size: 15px; color: #333;">
+                <p>Dear Team,</p>
+                <p>Below projects need your attention as <strong>ASBL numbers</strong> are not updated yet.</p>
+                <p>Kindly check and update the ASBL numbers in the next 3 days.</p>
+                <br/>
+                <p>Best Regards,<br/><strong>NI INDIA PMO Team</strong></p>
+            </div>
+        `,
+        attachments: attachmentsList // 🔥 Dynamic list of files
     };
     return transporter.sendMail(mailOptions);
 };
@@ -545,6 +567,8 @@ module.exports = {
 
     sendMissingCEMail,
 
-    sendMissingCEReminderMail
+    sendMissingCEReminderMail,
+
+    sendMissingAsblAlert
 
 };

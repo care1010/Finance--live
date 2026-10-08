@@ -15,6 +15,8 @@ let bgdmAlertJob = null;
 let projectAuditJob = null;
 let ptdReminderJob = null; // 🔥 Reference for Reminder
 let pendingLoaJob = null;  // 🔥 Reference for Pending Audit
+let asblAuditJob = null;
+let missingCEReminderJob = null; // 🔥 Reference for Missing CE Reminder
 
 let autoSyncTimeout = null; 
 let isSyncing = false;
@@ -243,40 +245,47 @@ const runMonthlyProjectAudit = async () => {
 
 // 1. Naya FTC REminder date checker Function define karein
 const runDailyReminderCheck = async () => {
-    console.log("🚀 CRON: Checking PTD Reminders...");
+    console.log("🚀 [CRON]: Checking PTD Reminders for All Active Users...");
     try {
+        // 1. Check if any reminders are due today
         const [due] = await db.query(
             `SELECT * FROM pending_ptd_reminders WHERE status = 'pending' AND scheduled_at <= NOW()`
         );
 
-        if (due.length === 0) return console.log("ℹ️ No pending reminders due.");
-
-        // 1. 🔥 Fetch saare active users
-        const [userRows] = await db.query("SELECT email FROM users WHERE is_active = '1'");
-        
-        // 2. 🔥 FILTER LOGIC: Sirf wahi users jinme '.ext' nahi hai
-        const internalUsers = userRows
-            .map(u => u.email)
-            .filter(email => {
-                // Email ko lowercase karke check karo ki '.ext@' hai ya nahi
-                return email && !email.toLowerCase().includes(".ext@");
-            });
-
-        if (internalUsers.length === 0) {
-            console.log("⚠️ No internal (non-ext) users found to send reminder.");
+        if (due.length === 0) {
+            console.log("ℹ️ [CRON]: No pending reminders due at this time.");
             return;
         }
 
+        // 2. 🔥 FETCH ALL ACTIVE USERS (Admin + Super Admin + Regular Users)
+        // Hum strictly wahi emails lenge jo 'is_active' hain
+        const [userRows] = await db.query(`
+            SELECT DISTINCT email 
+            FROM users 
+            WHERE is_active = '1' 
+            AND type IN ('admin', 'super_admin', 'user')
+        `);
+        
+        const allRecipientEmails = userRows.map(u => u.email).filter(Boolean);
+
+        if (allRecipientEmails.length === 0) {
+            console.log("⚠️ [CRON]: No active users found in database. Skipping reminder.");
+            return;
+        }
+
+        console.log(`📊 [CRON]: Sending reminder to ${allRecipientEmails.length} total users.`);
+
         for (const rem of due) {
-            // 3. Trigger filtered reminder
-            await mailService.sendPTDReminderAlert(internalUsers, rem.period_code);
+            // 3. Trigger reminder alert for all stakeholders
+            await mailService.sendPTDReminderAlert(allRecipientEmails, rem.period_code);
             
+            // 4. Update status so it doesn't send again
             await db.query(`UPDATE pending_ptd_reminders SET status = 'sent' WHERE id = ?`, [rem.id]);
-            console.log(`✅ Reminder sent to ${internalUsers.length} internal users for ${rem.period_code}`);
+            console.log(`✅ [SUCCESS]: Reminder sent for ${rem.period_code}`);
         }
 
     } catch (error) {
-        console.error("❌ Reminder Job Error:", error.message);
+        console.error("❌ [CRON ERROR]: Daily Reminder Job failed:", error.message);
     }
 };
 
@@ -372,6 +381,13 @@ exports.initCron = async () => {
             else if (conf.job_name === 'pending_loa_audit') {
                 pendingLoaJob = cron.schedule(conf.cron_expression, () => runPendingLoaAudit());
             }
+            else if (conf.job_name === 'asbl_audit' || conf.job_name === 'missing_asbl_audit') {
+                // 🔥 FIX: sendMissingAsblAlert() ki jagah runMonthlyAsblAudit() likhein
+                cron.schedule(conf.cron_expression, () => runMonthlyAsblAudit()); 
+            }
+            else if (conf.job_name === 'missing_ce_reminder') {
+                missingCEReminderJob = cron.schedule(conf.cron_expression, () => runMissingCEReminderJob());
+            }
         });
     } catch (err) {
         console.error("❌ Cron Init Error:", err.message);
@@ -425,15 +441,23 @@ exports.updateCronConfig = async (req, res) => {
 
 exports.triggerManualSync = async (req, res) => {
     const { job_name } = req.body;
+    console.log(`👤 [MANUAL]: Triggering job [${job_name}]`); // Debug log
     try {
         if (job_name === 'full_sync') {
-            runSync('manual_admin'); // Ab ye local function ko call karega, fail nahi hoga
+            runSync('manual_admin');
         } else if (job_name === 'db_backup') {
             runDatabaseBackup();
-        } else if (job_name === 'bgdm_alerts') {
-            runMonthlyAlerts();
-        } else if (job_name === 'monthly_project_audit') {
+        } 
+        // 🔥 Handle both names just in case
+        else if (job_name === 'asbl_audit' || job_name === 'missing_asbl_audit') {
+            runMonthlyAsblAudit(); 
+        }
+        else if (job_name === 'monthly_project_audit') {
             runMonthlyProjectAudit();
+        }
+        // 🔥 NAYA CASE ADDED: Reminder trigger ke liye
+        else if (job_name === 'missing_ce_reminder') {
+            runMissingCEReminderJob(); 
         }
         
         res.json({ message: `Job [${job_name}] triggered in background.` });
@@ -448,7 +472,7 @@ exports.triggerManualSync = async (req, res) => {
 const runMissingCEAuditMailer = async () => {
     console.log("\n📧 [MAILER]: Missing Cost Element check shuru...");
     try {
-        const [rows] = await db.query("SELECT loa_id, loa_name, raw_cost_element, source_table FROM missing_cost_elements_audit");
+        const [rows] = await db.query("SELECT wbs_element, raw_cost_element, source_table FROM missing_cost_elements_audit");
         
         if (rows.length === 0) {
             console.log("✅ [MAILER]: Saari mapping sahi hai. Mail skip kar rahe hain.");
@@ -459,9 +483,7 @@ const runMissingCEAuditMailer = async () => {
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet('Missing Elements');
         sheet.columns = [
-            { header: 'LOA ID', key: 'loa_id', width: 15 },
-            { header: 'LOA Name', key: 'loa_name', width: 40 },
-            { header: 'Raw Cost Element', key: 'raw_cost_element', width: 20 },
+            { header: 'Cost Element', key: 'raw_cost_element', width: 45 },
             { header: 'Source Table', key: 'source_table', width: 15 }
         ];
         rows.forEach(r => sheet.addRow(r));
@@ -477,6 +499,131 @@ const runMissingCEAuditMailer = async () => {
         }
     } catch (err) {
         console.error("❌ [MAILER ERROR]:", err.message);
+    }
+};
+
+// 🔥 NAYA: 5-Day Reminder for Missing CE
+const runMissingCEReminderJob = async () => {
+    console.log("⏰ [CRON]: Checking for 5-day old missing CE records...");
+    try {
+        const [rows] = await db.query(`SELECT wbs_element, raw_cost_element, source_table FROM missing_cost_elements_audit WHERE detected_at::date = (CURRENT_DATE - INTERVAL '5 days')::date`);
+        if (rows.length === 0) return;
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Reminder');
+        sheet.columns = [{ header: 'WBS Element', key: 'wbs_element', width: 40 }, { header: 'Raw Cost Element', key: 'raw_cost_element', width: 25 }, { header: 'Source', key: 'source_table', width: 15 }];
+        rows.forEach(r => sheet.addRow(r));
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        const [admins] = await db.query("SELECT email FROM users WHERE type = 'super_admin' AND is_active = '1'");
+        if (admins.length > 0) await mailService.sendMissingCEReminderMail(admins.map(a => a.email), buffer);
+    } catch (err) { console.error("❌ Reminder Job Error:", err.message); }
+};
+
+// 🔥 NAYA: Logic to fetch projects with 0 ASBL and send mail
+const runMonthlyAsblAudit = async () => {
+    console.log("🚀 [CRON]: Starting Consolidated User-based ASBL Audit...");
+    try {
+        // 1. Get ALL missing ASBL data (Strict Trim & Lower)
+        const wbsTypes = [
+            { label: 'AMC', filter: 'AMC', asblCol: 'asbl_amc', ncCol: 'non_committed_editable_amc' },
+            { label: 'Project', filter: 'Project', asblCol: 'asbl_project', ncCol: 'non_committed_editable_project' },
+            { label: 'Warranty', filter: 'Warranty/Other', asblCol: 'asbl_warranty', ncCol: 'non_committed_editable_warranty' }
+        ];
+
+        let allMissingData = [];
+
+        for (const type of wbsTypes) {
+            const query = `
+                SELECT bu, TRIM(customer) as customer, loa_id, loa_name, ? as type_label,
+                    ROUND(SUM(cat_asbl), 2) as asbl, ROUND(SUM(cat_ptd), 2) as ptd,
+                    ROUND(SUM(cat_oc), 2) as oc, ROUND(SUM(cat_nc), 2) as nc,
+                    ROUND(SUM(cat_ptd + cat_oc + cat_nc), 2) as eac,
+                    ROUND(SUM(cat_asbl) - SUM(cat_ptd + cat_oc + cat_nc), 2) as variance
+                FROM (
+                    SELECT t.bu, t.customer, t.loa_id, t.loa_name, t."Merged_wbs_categories",
+                        MAX(COALESCE(static.asbl_val, 0)) as cat_asbl,
+                        SUM(t.ptd) as cat_ptd, SUM(t."open_commitment_KEUR") as cat_oc,
+                        MAX(COALESCE(static.nc_val, 0)) as cat_nc
+                    FROM final_dashboard_table t
+                    LEFT JOIN (
+                        SELECT "Merged_wbs_categories", MAX(${type.asblCol}) as asbl_val, MAX(${type.ncCol}) as nc_val
+                        FROM final_dashboard_table GROUP BY 1
+                    ) as static ON t."Merged_wbs_categories" = static."Merged_wbs_categories"
+                    WHERE t.active_inactive = 'Active' AND t.cost_revenue = 'Cost'
+                      AND t.categories NOT IN ('Not to considered')
+                      AND TRIM(LOWER(t.wbs_type)) = TRIM(LOWER(?))
+                    GROUP BY 1, 2, 3, 4, 5
+                ) as rollup
+                GROUP BY 1, 2, 3, 4
+                HAVING SUM(cat_asbl) = 0 OR SUM(cat_asbl) IS NULL
+            `;
+            const [rows] = await db.query(query, [type.label, type.filter]);
+            allMissingData.push(...rows);
+        }
+
+        if (allMissingData.length === 0) return console.log("✅ [CRON]: No missing data found.");
+
+        // 2. Get Users and their mapped Customers (Apply TRIM & LOWER here too)
+        const [userMappings] = await db.query(`
+            SELECT DISTINCT LOWER(TRIM(u.email)) as email, LOWER(TRIM(a.customer)) as customer 
+            FROM users u
+            JOIN access a ON TRIM(LOWER(u.email)) = TRIM(LOWER(a.email))
+            WHERE u.is_active = '1'
+            AND u.type NOT IN ('admin', 'super_admin')
+        `);
+
+        // 3. Map Workload
+        const userWorkload = {};
+        userMappings.forEach(m => {
+            if (!userWorkload[m.email]) userWorkload[m.email] = new Set();
+            userWorkload[m.email].add(m.customer);
+        });
+
+        // 4. Send Mails
+        for (const email of Object.keys(userWorkload)) {
+            const allowedCustomers = userWorkload[email]; // This is a Set of lower-case trimmed customers
+            
+            // 🔥 CRITICAL FIX: Filter data matching strictly with user's customers
+            const userData = allMissingData.filter(d => 
+                allowedCustomers.has(String(d.customer || '').trim().toLowerCase())
+            );
+
+            if (userData.length === 0) continue;
+
+            const attachmentsList = [];
+            const createBuffer = async (label, filename) => {
+                const specificRows = userData.filter(d => d.type_label === label);
+                if (specificRows.length > 0) {
+                    const workbook = new ExcelJS.Workbook();
+                    const sheet = workbook.addWorksheet('Missing Data');
+                    sheet.columns = [
+                        { header: 'BU', key: 'bu', width: 10 }, { header: 'Customer', key: 'customer', width: 25 },
+                        { header: 'LOA ID', key: 'loa_id', width: 15 }, { header: 'LOA Name', key: 'loa_name', width: 40 },
+                        { header: 'ASBL', key: 'asbl', width: 12 }, { header: 'PTD', key: 'ptd', width: 12 },
+                        { header: 'Open Commitment', key: 'oc', width: 18 }, { header: 'Non Committed', key: 'nc', width: 15 },
+                        { header: 'EAC', key: 'eac', width: 12 }, { header: 'EAC VS ASBL', key: 'variance', width: 15 }
+                    ];
+                    specificRows.forEach(r => sheet.addRow(r));
+                    sheet.getRow(1).eachCell(c => {
+                        c.font = { bold: true, color: { argb: 'FFFFFF' } };
+                        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '124191' } };
+                    });
+                    attachmentsList.push({ filename: `${filename}.xlsx`, content: await workbook.xlsx.writeBuffer() });
+                }
+            };
+
+            await createBuffer('AMC', 'Missing_ASBL_AMC');
+            await createBuffer('Project', 'Missing_ASBL_Project');
+            await createBuffer('Warranty', 'Missing_ASBL_Warranty');
+
+            if (attachmentsList.length > 0) {
+                await mailService.sendMissingAsblAlert([email], attachmentsList);
+                console.log(`📧 SUCCESS: Mail sent to ${email} with ${userData.length} total rows.`);
+            }
+        }
+    } catch (err) {
+        console.error("❌ [CRON ERROR]:", err.message);
     }
 };
 

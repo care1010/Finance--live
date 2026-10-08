@@ -27,6 +27,11 @@ router.get('/categories', dataController.getCategories);
 router.post('/save-project', dataController.saveProjectData);
 router.post('/update-non-committed', dataController.updateNonCommitted);
 router.post('/ptd-automation', upload.single('file'), ptdController.uploadPtdData);
+
+// 🔥 NAYE ROUTES: Inhe add karein
+router.get('/mapping-options', ptdController.getMappingOptions); // Changed from mapping-categories
+router.post('/add-cost-mapping', ptdController.addCostMapping);
+
 router.get('/review-changes', dataController.getReviewChanges);
 router.post('/finalize-changes', dataController.finalizeChanges);
 router.post('/process-project-paste', projectController.processProjectPaste);

@@ -798,28 +798,27 @@ exports.runFullSyncCore = async () => {
             
             // 2. Nayi list insert karo
             await connection.query(`
-                INSERT INTO missing_cost_elements_audit (loa_id, loa_name, raw_cost_element, source_table)
-                
-                -- CJ74 se missing elements uthao
-                SELECT DISTINCT loa_id, loa_name, raw_cost_element, 'CJ74'
-                FROM cj74_new c
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM cost_mapping cm 
-                    WHERE TRIM(cm.cost_element) = TRIM(c.raw_cost_element)
-                )
-                AND raw_cost_element IS NOT NULL AND raw_cost_element <> ''
-                
-                UNION
-                
-                -- CJI5 se missing elements uthao
-                SELECT DISTINCT loa_id, project_def as loa_name, raw_cost_element, 'CJI5'
-                FROM cji5_new ci
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM cost_mapping cm 
-                    WHERE TRIM(cm.cost_element) = TRIM(ci.raw_cost_element)
-                )
-                AND raw_cost_element IS NOT NULL AND raw_cost_element <> ''
-            `);
+                INSERT INTO missing_cost_elements_audit (wbs_element, raw_cost_element, source_table)
+                    -- Part 1: Check CJ74 using 'object_1'
+                    SELECT DISTINCT object_1, raw_cost_element, 'CJ74'
+                    FROM cj74_new c
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM cost_mapping cm 
+                        WHERE TRIM(cm.cost_element) = TRIM(c.raw_cost_element)
+                    )
+                    AND raw_cost_element IS NOT NULL AND raw_cost_element <> ''
+                    
+                    UNION
+                    
+                    -- Part 2: Check CJI5 using 'wbs_element'
+                    SELECT DISTINCT wbs_element, raw_cost_element, 'CJI5'
+                    FROM cji5_new ci
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM cost_mapping cm 
+                        WHERE TRIM(cm.cost_element) = TRIM(ci.raw_cost_element)
+                    )
+                    AND raw_cost_element IS NOT NULL AND raw_cost_element <> ''
+                `);
             console.log("✅ [Logs:]: Missing Cost elements stored successfully from CJI5, CJ74.");
 
         } catch (innerError) {
@@ -837,6 +836,7 @@ exports.runFullSyncCore = async () => {
         connection.release(); // 🔥 ALWAYS Release back to pool
     }
 };
+
 
 // 5. FULL REFRESH (API Wrapper)
 exports.fullRefresh = async (req, res) => {
@@ -2040,6 +2040,7 @@ exports.getNegativeLOATable = async (req, res) => {
     } catch (error) { res.status(500).json({ error: error.message }); }
 };
 
+//BU + Customer + LOA Table View
 exports.getCostViewTable = async (req, res) => {
     try {
         const { type, allowedCustomers } = req.query;
