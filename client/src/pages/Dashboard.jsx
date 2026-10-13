@@ -216,6 +216,7 @@ const Dashboard = ({ user, filters, onFilterChange, onResetFilters }) => {
                 else if (tableView === 'negative-loa') endpoint = 'negative-loa-table';
                 else if (tableView === 'overspent-loa') endpoint = 'overspent-loa-table'; // 🔥 NAYA ENDPOINT
                 else if (tableView === 'customer-bu-loa') endpoint = 'customer-bu-loa-view-table';
+                else if (tableView === 'percent-view') endpoint = 'percent-view-table'; // 🔥 Naya mapping
 
                 const tableRes = await axios.get(`${process.env.REACT_APP_API_URL}/api/data/${endpoint}?${commonParams.toString()}`, { signal });
                 setTableData(tableRes.data);
@@ -241,7 +242,24 @@ const Dashboard = ({ user, filters, onFilterChange, onResetFilters }) => {
         tableView === 'negative-loa' ? ['bu', 'customer', 'loa_id', 'loa_name', 'asbl', 'ptd', 'open_commitment', 'non_committed', 'eac', 'eac_vs_asbl'] :
         tableView === 'overspent-loa' ? ['bu', 'customer', 'loa_id', 'loa_name', 'asbl', 'ptd', 'open_commitment', 'non_committed', 'eac', 'eac_vs_asbl'] :
         tableView === 'customer-bu-loa' ? ['customer', 'bu', 'loa_name', 'asbl', 'ptd', 'open_commitment', 'non_committed', 'eac', 'eac_vs_asbl'] :
-        ['customer', 'asbl', 'ptd', 'open_commitment', 'non_committed', 'eac', 'eac_vs_asbl'];
+        tableView === 'percent-view' ? ['bu', 'customer', 'loa_id', 'loa_name', 'asbl', 'ptd', 'open_commitment', 'non_committed', 'eac', 'eac_vs_asbl', 'eac_vs_asbl_perc', 'ptd_util_perc'] :
+            ['customer', 'asbl', 'ptd', 'open_commitment', 'non_committed', 'eac', 'eac_vs_asbl'];
+
+    // 2. Table Cell Formatting logic
+    const renderValue = (col, val) => {
+    // 1. Handling Percentages (Database returns numeric 85.50)
+        if (['ptd_perc', 'eac_perc'].includes(col)) {
+            return val !== null && val !== undefined ? `${parseFloat(val).toFixed(1)}%` : '0.0%';
+        }
+        
+        // 2. Handling Numbers
+        if (['asbl', 'ptd', 'open_commitment', 'non_committed', 'eac', 'eac_vs_asbl'].includes(col)) {
+            return val !== null && val !== undefined ? formatNum(val) : '0.00';
+        }
+        
+        // 3. Handling Text
+        return val || '-';
+    };
 
     const predefinedOrder = ['IP', 'Optics', 'FN'];
     const sortedBuData = [...buData].sort((a, b) => {
@@ -284,30 +302,45 @@ const Dashboard = ({ user, filters, onFilterChange, onResetFilters }) => {
                     </div>
                 </div>
 
-                {/* ─── SUMMARY TABLE ─── */}
+                {/* ─── Quick views TABLE ─── */}
                 <div className="bg-white rounded-[1.5rem] p-6 shadow-lg border border-slate-100 mb-8">
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
                         <h2 className="text-2xl font-black font-semibold text-slate-800 uppercase">Summary (K€)</h2>
                         <div className="flex flex-wrap items-center gap-2 xl:gap-3 ml-auto">
                             <p className="text-xs font-medium text-slate-800 uppercase tracking-wider mr-2">Quick Views:</p>
-                            {[
-                                { key: 'bu', label: 'BU Only' }, { key: 'bu-customer', label: 'BU + Customer' }, { key: 'loa', label: 'BU + Cust + LOA' },
-                                { key: 'customer', label: 'Customer Only' }, { key: 'customer-bu', label: 'Customer + BU' }, 
-                                { key: 'customer-bu-loa', label: 'Customer + BU + LOA' }, { key: 'negative-loa', label: '-ve LOA' },
-                            ].map(({ key, label }) => (
-                                <button key={key} onClick={() => setTableView(key)} className={`border border-slate-300 border-t-4 px-5 py-2 rounded-lg shadow-sm hover:shadow-md transition-all text-sm font-semibold ${tableView === key ? 'border-t-[#124191] bg-[#2563EB] text-white' : 'border-t-slate-800 bg-white text-slate-800 hover:bg-slate-50'}`}>{label}</button>
-                            ))}
 
-                            {/* <button
-                                onClick={() => setTableView('overspent-loa')}
-                                className={`border border-slate-300 border-t-4 px-5 py-2 rounded-lg shadow-sm hover:shadow-md transition-all text-sm font-semibold
-                                    ${tableView === 'overspent-loa'
-                                        ? 'border-t-[#d32f2f] bg-[#EF4444] text-white'
-                                        : 'border-t-orange-500 bg-white text-slate-800 hover:bg-slate-50'
-                                    }`}
-                            >
-                                -ve
-                            </button> */}
+                                {/* 🔥 Naya Filtered Button Logic */}
+                                {(() => {
+                                    // 1. Pehle basic buttons ka array banao jo sabko dikhenge
+                                    const buttons = [
+                                        { key: 'bu', label: 'BU Only' }, 
+                                        { key: 'bu-customer', label: 'BU + Customer' }, 
+                                        { key: 'loa', label: 'BU + Cust + LOA' },
+                                        { key: 'customer', label: 'Customer Only' }, 
+                                        { key: 'customer-bu', label: 'Customer + BU' }, 
+                                        { key: 'customer-bu-loa', label: 'Customer + BU + LOA' }, 
+                                        { key: 'negative-loa', label: '-ve LOA' }
+                                    ];
+
+                                    // 2. Agar user Admin ya Super Admin hai, toh hi 'Percent View' add karo
+                                    if (user?.type === 'admin' || user?.type === 'super_admin') {
+                                        buttons.push({ key: 'percent-view', label: 'Percent View' });
+                                    }
+
+                                    // 3. Ab in buttons ko render karo
+                                    return buttons.map(({ key, label }) => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setTableView(key)}
+                                            className={`border border-slate-300 border-t-4 px-5 py-2 rounded-lg shadow-sm hover:shadow-md transition-all text-sm font-semibold 
+                                                ${tableView === key 
+                                                    ? 'border-t-[#124191] bg-[#2563EB] text-white' 
+                                                    : 'border-t-slate-800 bg-white text-slate-800 hover:bg-slate-50'}`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ));
+                                })()}
                             <button onClick={exportToExcel} className="border border-slate-300 border-t-4 border-t-blue-500 bg-white px-5 py-2 shadow-sm hover:shadow-md transition-all flex items-center gap-2 rounded-lg">
                                 <HiOutlineUpload className="text-blue-600" /> <span className="text-sm font-semibold text-blue-700">Export</span>
                             </button>
@@ -323,7 +356,12 @@ const Dashboard = ({ user, filters, onFilterChange, onResetFilters }) => {
                                     <tr key={index} className="hover:bg-slate-50 transition-colors">
                                         {columnsToShow.map((col) => (
                                             <td key={col} className="border border-slate-200 px-4 py-3 text-slate-700 font-medium text-center">
-                                                {['asbl','asbl_loa','ptd','open_commitment','non_committed','eac','eac_vs_asbl'].includes(col) ? (row[col] !== null && row[col] !== undefined ? formatNum(row[col]) : "") : row[col]}
+                                                {['asbl','asbl_loa','ptd','open_commitment','non_committed','eac','eac_vs_asbl'].includes(col) 
+                                                    ? (row[col] !== null && row[col] !== undefined ? formatNum(row[col]) : "") 
+                                                    : ['ptd_util_perc', 'eac_vs_asbl_perc'].includes(col)
+                                                        ? <span className="font-bold text-blue-700">{row[col]}%</span> // 🔥 Showing percentage
+                                                        : row[col]
+                                                }
                                             </td>
                                         ))}
                                     </tr>

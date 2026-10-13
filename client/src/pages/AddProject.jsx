@@ -116,7 +116,7 @@ const SearchableDropdown = ({
 
 const AddProject = ({ user }) => {
     const [mode, setMode] = useState('new'); 
-    const [inputMethod, setInputMethod] = useState('paste'); 
+    const [inputMethod, setInputMethod] = useState('grid'); 
     const [pasteData, setPasteData] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -366,7 +366,7 @@ const AddProject = ({ user }) => {
 
                     {/* 🔥 LOA NAME: Conditional Dropdown */}
                     <td className="p-1">
-{mode === 'existing' ? ( <SearchableDropdown options={loaNameOptions} value={row.loa_name} placeholder="Select Project" dropdownId={`project-name-${idx}`} openDropdown={openDropdown} setOpenDropdown={setOpenDropdown} onChange={(value) => handleGridChange(idx, 'loa_name', value) } /> ) : ( <input className="w-full p-2 bg-transparent outline-none focus:bg-white" value={row.loa_name} onChange={(e) => handleGridChange(idx, 'loa_name', e.target.value )} placeholder="Project XYZ" /> )}
+                    {mode === 'existing' ? ( <SearchableDropdown options={loaNameOptions} value={row.loa_name} placeholder="Select Project" dropdownId={`project-name-${idx}`} openDropdown={openDropdown} setOpenDropdown={setOpenDropdown} onChange={(value) => handleGridChange(idx, 'loa_name', value) } /> ) : ( <input className="w-full p-2 bg-transparent outline-none focus:bg-white" value={row.loa_name} onChange={(e) => handleGridChange(idx, 'loa_name', e.target.value )} placeholder="Project XYZ" /> )}
 
                     </td>
                                             <td className="p-1">

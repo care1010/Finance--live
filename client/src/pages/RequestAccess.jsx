@@ -138,7 +138,8 @@ const RequestAccess = ({ onBack }) => {
         bus: [],
         projects: [],
         email: '',
-        password: ''
+        password: '',
+        role: ''
     });
  
     const [dropdowns, setDropdowns] = useState({ customers: [], bus: [], loas: [] });
@@ -212,7 +213,8 @@ const RequestAccess = ({ onBack }) => {
                 bu: formData.bus.join('|||'),
                 loa: formData.projects.join('|||'),
                 email: formData.email,
-                password: formData.password
+                password: formData.password,
+                role: formData.role // 🔥 Naya field sent to backend
             }
         );
 
@@ -336,6 +338,23 @@ const RequestAccess = ({ onBack }) => {
                                 placeholder="Select Project(s)..."
                                 onChange={handleFormChange}
                             />
+                        </div>
+
+                        {/* Customer, BU, Project dropdowns ke baad aur Email ke pehle ye add karein */}
+                        <div>
+                            <label className="text-[13px] font-bold text-slate-900 uppercase tracking-wider ml-1">Requested Role *</label>
+                            <select
+                                required
+                                value={formData.role}
+                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                className="w-full mt-1.5 p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-bold text-slate-700"
+                            >
+                                <option value="">-- Select Your Role --</option>
+                                <option value="BGDM">BGDM</option>
+                                <option value="PM/CaPM">PM/CaPM</option>
+                                <option value="User">User</option>
+                                <option value="Admin">Admin</option>
+                            </select>
                         </div>
  
                         <div>
