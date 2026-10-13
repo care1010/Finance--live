@@ -64,12 +64,11 @@ exports.getDropdownData = async (req, res) => {
 
 // 2. Submit Request (Improved with Duplicate Checks)
 exports.submitRequest = async (req, res) => {
-    const { email, password, customer, bu, loa } = req.body;
+    // 🔥 FIX 1: Destructuring mein 'role' shamil karein
+    const { email, password, customer, bu, loa, role } = req.body; 
 
     try {
-        console.log("📥 Incoming Request Validation for:", email);
-
-        if (!email || !password || !customer) {
+        if (!email || !password || !customer || !role) { // Role check bhi add kiya
             return res.status(400).json({ success: false, error: "Required fields missing." });
         }
 
@@ -78,50 +77,34 @@ exports.submitRequest = async (req, res) => {
         const buString = bu ? bu.trim() : '';
         const loaString = loa ? loa.trim() : '';
 
-        let alreadyHaveAccess = [];
-        let alreadyRequested = [];
         let newlyAdded = [];
+        let alreadyRequested = [];
+        let alreadyHaveAccess = [];
 
         for (const singleCust of customerList) {
             const cleanCust = singleCust.trim().toLowerCase();
 
-            // Check if user ALREADY HAS ACCESS
-            const [accessExists] = await db.query(
-                `SELECT id FROM "access" WHERE LOWER(TRIM(email)) = ? AND LOWER(TRIM(customer)) = ? LIMIT 1`,
-                [cleanEmail, cleanCust]
-            );
+            // 1. Check existing access
+            const [accessExists] = await db.query(`SELECT id FROM "access" WHERE LOWER(TRIM(email)) = ? AND LOWER(TRIM(customer)) = ? LIMIT 1`, [cleanEmail, cleanCust]);
+            if (accessExists.length > 0) { alreadyHaveAccess.push(singleCust); continue; }
 
-            if (accessExists.length > 0) {
-                alreadyHaveAccess.push(singleCust);
-                continue;
-            }
-
-            // Check if request ALREADY PENDING or APPROVED
+            // 2. Check pending request
             const [existingRequest] = await db.query(
                 `SELECT id FROM "access_requests" 
-                 WHERE LOWER(TRIM(email)) = ? 
-                 AND LOWER(TRIM(requested_customers)) = ? 
-                 AND LOWER(TRIM(COALESCE(bu, ''))) = ? 
-                 AND LOWER(TRIM(COALESCE(project_name, ''))) = ? 
-                 AND LOWER(TRIM(status)) IN ('pending', 'approved') LIMIT 1`,
-                [cleanEmail, cleanCust, buString.toLowerCase(), loaString.toLowerCase()]
+                 WHERE LOWER(TRIM(email)) = ? AND LOWER(TRIM(requested_customers)) = ? AND status IN ('Pending', 'Approved') LIMIT 1`,
+                [cleanEmail, cleanCust]
             );
+            if (existingRequest.length > 0) { alreadyRequested.push(singleCust); continue; }
 
-            if (existingRequest.length > 0) {
-                alreadyRequested.push(singleCust);
-                continue;
-            }
-
-            // Create New Request
+            // 3. 🔥 FIX 2: Create New Request (Placeholder and Variable Sync)
             const hashedPassword = await bcrypt.hash(password, 10);
             await db.query(
-                `INSERT INTO "access_requests" (email, password, requested_customers, bu, project_name, status) VALUES (?, ?, ?, ?, ?, ?)`,
-                [email.trim(), hashedPassword, singleCust, buString, loaString, 'Pending']
+                `INSERT INTO "access_requests" (email, password, requested_customers, bu, project_name, user_role, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [email.trim(), hashedPassword, singleCust, buString, loaString, role, 'Pending'] // 👈 'role' variable ab defined hai
             );
             newlyAdded.push(singleCust);
         }
 
-        // --- Response Logic based on counts ---
 
         // Case: No new entries were added (Only duplicates)
         if (newlyAdded.length === 0) {
@@ -189,7 +172,7 @@ exports.submitRequest = async (req, res) => {
 // 4. Get All Pending Requests for Admin Panel
 exports.getPendingRequests = async (req, res) => {
     try {
-        const [rows] = await db.query("SELECT id, email, requested_customers, bu, project_name, created_at FROM access_requests WHERE status = 'Pending' ORDER BY created_at DESC");
+        const [rows] = await db.query("SELECT id, email, requested_customers, bu, project_name, user_role, created_at FROM access_requests WHERE status = 'Pending' ORDER BY created_at DESC");
         res.status(200).json(rows);
     } catch (err) { 
         res.status(500).json({ error: err.message }); 
@@ -216,8 +199,14 @@ exports.approveRequest = async (req, res) => {
         const [userExists] = await connection.query('SELECT "email" FROM "users" WHERE TRIM(LOWER("email")) = TRIM(LOWER(?))', [requestDetails.email]);
         if (userExists.length === 0) {
             await connection.query(
-                'INSERT INTO "users" ("email", "password", "type") VALUES (?, ?, ?)', 
-                [requestDetails.email, requestDetails.password, 'user']
+                'INSERT INTO "users" ("email", "password", "type", "user_role") VALUES (?, ?, ?, ?)', 
+                [requestDetails.email, requestDetails.password, 'user', requestDetails.user_role]
+            );
+        } else {
+            // Purana user: Sirf Role update karein
+            await connection.query(
+                'UPDATE "users" SET "user_role" = ? WHERE "email" = ?',
+                [details.user_role, details.email]
             );
         }
 

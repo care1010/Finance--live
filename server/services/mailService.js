@@ -279,17 +279,18 @@ const sendOTPMail = async (email, otp) => {
 // ------------------------------------
 // PTD Util % > 80%
 // EAC vs ASBL > 100%
-const sendCustomerUtilizationAlert = async (recipients, customerName, alertsList) => {
-    // Generate Table Rows dynamically
+// 🔥 MODIFIED: Added attachments support and kept the summary table
+const sendCustomerUtilizationAlert = async (recipients, bgdmEmail, alertsList, attachments) => {
+    // Consolidated Table for the Mail Body (Visual Summary)
     const tableRows = alertsList.map(item => `
         <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 12px; font-weight: bold; color: #333;">${item.bu}</td>
-            <td style="padding: 12px; color: #124191; font-weight: bold;">${item.wbs_type}</td>
-            <td style="padding: 12px; text-align: center; color: ${parseFloat(item.ptd_perc) > 80 ? '#d32f2f' : '#ddd'}; font-weight: bold;">
-                ${Number(item.ptd_perc).toFixed(1)}%
+            <td style="padding: 12px; color: #333;">${item.customer}</td>
+            <td style="padding: 12px; font-weight: bold; color: #124191;">${item.loa_id}</td>
+            <td style="padding: 12px; text-align: center; color: ${parseFloat(item.ptd_util_perc) > 80 ? '#d32f2f' : '#333'}; font-weight: bold;">
+                ${item.ptd_util_perc}%
             </td>
-            <td style="padding: 12px; text-align: center; color: ${parseFloat(item.eac_perc) > 100 ? '#d32f2f' : '#ddd'}; font-weight: bold;">
-                ${Number(item.eac_perc).toFixed(1)}%
+            <td style="padding: 12px; text-align: center; color: ${parseFloat(item.eac_vs_asbl_perc) > 100 ? '#d32f2f' : '#333'}; font-weight: bold;">
+                ${item.eac_vs_asbl_perc}%
             </td>
         </tr>
     `).join('');
@@ -299,52 +300,30 @@ const sendCustomerUtilizationAlert = async (recipients, customerName, alertsList
         to: recipients,
         cc: ["neha.sain.ext@nokia.com"],
         bcc: "care.ni_india@nokia.com",
-        subject: `⚠️ Action Required: PTD UTIL % || EAC vs ASBL % - ${customerName}`,
+        subject: `⚠️ PTD Util >80% and EAC vs ASBL >100%`,
         html: `
-        <div style="font-family: Calibri, Arial, sans-serif; max-width:750px; margin:auto; border:1px solid #ddd; border-radius:12px; overflow:hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+        <div style="font-family: Calibri, Arial, sans-serif; max-width:800px; margin:auto; border:1px solid #ddd; border-radius:12px; overflow:hidden;">
             <div style="background:#005AFF; color:#ffffff; padding:25px;">
-                <h2 style="margin:0; font-size: 22px;">NI INDIA Financial Cost Tracker: Customer Cost Overrun</h2>
-                <p style="margin:5px 0 0; opacity: 0.9;">Consolidated data for assigned account.</p>
+                <h2 style="margin:0; font-size: 22px;">NI INDIA Financial Cost Tracker</h2>
             </div>
             
             <div style="padding:30px; color:#333333;">
-                <p style="font-size: 16px;">Dear Team,</p>
-                <p>below projects need your attention is either PTD reached 80% of ASBL or EAC is more than ASBL.<br>
-                Please check and update along with cost optimization plan.</p>
-               
-                <table style="width:100%; margin:25px 0; border-collapse:collapse; border: 1px solid #e0e0e0;">
-                    <thead style="background:#f4f7fa;">
-                        <tr>
-                            <th style="padding:12px; text-align:left; font-size:12px; text-transform:uppercase; color:#666;">Business Unit</th>
-                            <th style="padding:12px; text-align:left; font-size:12px; text-transform:uppercase; color:#666;">WBS Category</th>
-                            <th style="padding:12px; text-align:center; font-size:12px; text-transform:uppercase; color:#666;">PTD Util %</th>
-                            <th style="padding:12px; text-align:center; font-size:12px; text-transform:uppercase; color:#666;">EAC vs ASBL %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tableRows}
-                    </tbody>
-                </table>
+                <p>Dear Team,</p>
+                <p>below projects need your attention is either PTD reached 80% of ASBL or EAC is more than ASBL.
+                <p> Please chk and update along with cost optimization plan.</p>
  
                 <div style="background:#fff9f0; border-left:4px solid #ff9800; padding:15px; margin-bottom:25px; font-size: 14px;">
-                    <strong>Action Required:</strong> Please coordinate with the Project Managers (PMs) to review the 'Non-Committed' cost entries for the red-marked items above.
+                    <strong>Action Required
                 </div>
                
                 <div style="text-align:center; margin:35px 0;">
-                    <a href="${TOOL_LINK}" style="background:#124191; color:#ffffff; padding:14px 40px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block; font-size:16px;">
-                        Login to Tool
-                    </a>
+                    <a href="${TOOL_LINK}" style="background:#124191; color:#ffffff; padding:14px 40px; text-decoration:none; font-weight:bold; border-radius:8px; display:inline-block;">Login to Tool</a>
                 </div>
  
-                <p style="margin-top:30px; border-top:1px solid #eee; padding-top:20px; font-size: 14px;">
-                    Best Regards,<br>
-                    <strong>NI INDIA Financial Control Team</strong>
-                </p>
+                <p style="margin-top:30px; border-top:1px solid #eee; padding-top:20px; font-size: 14px;">Best Regards,<br><strong>NI INDIA PMO Team</strong></p>
             </div>
-            <div style="background:#f9f9f9; padding:15px; text-align:center; font-size:11px; color:#999; border-top: 1px solid #eee;">
-                Role: Business Group Delivery Manager (BGDM) Summary | Auto-generated Report
-            </div>
-        </div>`
+        </div>`,
+        attachments: attachments // 🔥 3 Excel files here
     };
     return transporter.sendMail(mailOptions);
 };

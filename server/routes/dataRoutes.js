@@ -165,4 +165,6 @@ router.get('/pending-loas', dataController.getPendingLoas);
 
 router.get('/overspent-loa-table', dataController.getOverspentLOATable);
 
+router.get('/percent-view-table', dataController.getPercentViewTable);
+
 module.exports = router;

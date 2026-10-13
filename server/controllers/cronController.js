@@ -459,6 +459,10 @@ exports.triggerManualSync = async (req, res) => {
         else if (job_name === 'missing_ce_reminder') {
             runMissingCEReminderJob(); 
         }
+        // 🔥 bgdm_alerts
+        else if (job_name === 'bgdm_alerts') {
+            runMonthlyStakeholderAlerts(); 
+        }
         
         res.json({ message: `Job [${job_name}] triggered in background.` });
     } catch (err) { 
@@ -649,4 +653,136 @@ exports.triggerAutoSync = (source) => {
 exports.testDatabaseBackup = (req, res) => {
     runDatabaseBackup();
     res.json({ message: "Backup process triggered in background. Check console logs." });
+};
+
+// 🔥 NAYA: Monthly BGDM Alert Runner
+const runMonthlyStakeholderAlerts = async () => {
+    console.log("🚀 [CRON]: Starting Consolidated BGDM Alerts (Grouping Users)...");
+    try {
+        // 1. Get ALL projects exceeding thresholds (Consolidated first)
+        const wbsTypes = [
+            { label: 'AMC', filter: 'AMC', file: 'AMC_Loa.xlsx', asbl: 'asbl_amc', nc: 'non_committed_editable_amc' },
+            { label: 'Project', filter: 'Project', file: 'Project_Loa.xlsx', asbl: 'asbl_project', nc: 'non_committed_editable_project' },
+            { label: 'Warranty', filter: 'Warranty/Other', file: 'Warranty_Loa.xlsx', asbl: 'asbl_warranty', nc: 'non_committed_editable_warranty' }
+        ];
+
+        let allCriticalData = [];
+
+        for (const t of wbsTypes) {
+            const query = `
+                SELECT * FROM (
+                    SELECT bu, customer, loa_id, loa_name, ? as type_label, ? as type_filter,
+                        ROUND(SUM(cat_asbl), 2) as asbl, ROUND(SUM(cat_ptd), 2) as ptd,
+                        ROUND(SUM(cat_oc), 2) as oc, ROUND(SUM(cat_nc), 2) as nc,
+                        ROUND(SUM(cat_ptd + cat_oc + cat_nc), 2) as eac,
+                        ROUND(SUM(cat_asbl) - SUM(cat_ptd + cat_oc + cat_nc), 2) as eac_vs_asbl,
+                        CASE WHEN SUM(cat_asbl) > 0 THEN ROUND(CAST((SUM(cat_ptd) / SUM(cat_asbl)) * 100 AS NUMERIC), 1) ELSE 0.0 END as ptd_util_perc,
+                        CASE WHEN SUM(cat_asbl) > 0 THEN ROUND(CAST((SUM(cat_ptd + cat_oc + cat_nc) / SUM(cat_asbl)) * 100 AS NUMERIC), 1) ELSE 0.0 END as eac_vs_asbl_perc
+                    FROM (
+                        SELECT t.bu, t.customer, t.loa_id, t.loa_name, t."Merged_wbs_categories",
+                            MAX(COALESCE(static.asbl_val, 0)) as cat_asbl,
+                            SUM(t.ptd) as cat_ptd, SUM(t."open_commitment_KEUR") as cat_oc,
+                            MAX(COALESCE(static.nc_val, 0)) as cat_nc
+                        FROM final_dashboard_table t
+                        LEFT JOIN (
+                            SELECT "Merged_wbs_categories", MAX(${t.asbl}) as asbl_val, MAX(${t.nc}) as nc_val
+                            FROM final_dashboard_table GROUP BY 1
+                        ) as static ON t."Merged_wbs_categories" = static."Merged_wbs_categories"
+                        WHERE t.active_inactive = 'Active' AND t.cost_revenue = 'Cost'
+                          AND t.categories NOT IN ('Not to considered')
+                          AND TRIM(LOWER(t.wbs_type)) = TRIM(LOWER(?))
+                        GROUP BY 1, 2, 3, 4, 5
+                    ) as rollup GROUP BY 1, 2, 3, 4
+                ) final_calc
+                WHERE ptd_util_perc > 80 OR eac_vs_asbl_perc > 100
+            `;
+            const [rows] = await db.query(query, [t.label, t.file, t.filter]);
+            allCriticalData.push(...rows);
+        }
+
+        if (allCriticalData.length === 0) return console.log("✅ [CRON]: No cost overrun data found.");
+
+        // 2. Get Users and Customers (Trim & Lower for safety)
+        const [bgdmMappings] = await db.query(`
+            SELECT DISTINCT LOWER(TRIM(u.email)) as email, LOWER(TRIM(a.customer)) as customer 
+            FROM users u 
+            JOIN access a ON TRIM(LOWER(u.email)) = TRIM(LOWER(a.email))
+            WHERE u.user_role = 'BGDM' AND u.is_active = '1'
+        `);
+
+        // 3. 🔥 THE GROUPING MAGIC: Group Users by their EXACT Customer Set
+        const userToCustomers = {};
+        bgdmMappings.forEach(m => {
+            if (!userToCustomers[m.email]) userToCustomers[m.email] = new Set();
+            userToCustomers[m.email].add(m.customer);
+        });
+
+        const workloadGroups = {}; // Key: "bharti|vodafone", Value: [email1, email2]
+        Object.keys(userToCustomers).forEach(email => {
+            const customerKey = Array.from(userToCustomers[email]).sort().join('|');
+            if (!workloadGroups[customerKey]) workloadGroups[customerKey] = [];
+            workloadGroups[customerKey].push(email);
+        });
+
+        // 4. Process each unique group (One Mail per Group)
+        for (const customerKey of Object.keys(workloadGroups)) {
+            const recipients = workloadGroups[customerKey];
+            const allowedCustomers = customerKey.split('|');
+
+            // Filter critical data for this group's customers
+            const groupData = allCriticalData.filter(d => 
+                allowedCustomers.includes(String(d.customer).trim().toLowerCase())
+            );
+
+            if (groupData.length === 0) continue;
+
+            const attachmentsList = [];
+            const labels = ['AMC', 'Project', 'Warranty'];
+            
+            for (const label of labels) {
+                const typeRows = groupData.filter(d => d.type_label === label);
+                if (typeRows.length > 0) {
+                    const workbook = new ExcelJS.Workbook();
+                    const sheet = workbook.addWorksheet('Data');
+                    sheet.columns = [
+                        { header: 'BU', key: 'bu', width: 10 }, { header: 'Customer', key: 'customer', width: 25 },
+                        { header: 'LOA ID', key: 'loa_id', width: 15 }, { header: 'LOA Name', key: 'loa_name', width: 40 },
+                        { header: 'ASBL', key: 'asbl', width: 12 }, { header: 'PTD', key: 'ptd', width: 12 },
+                        { header: 'Open Commitment', key: 'oc', width: 18 }, { header: 'Non Committed', key: 'nc', width: 15 },
+                        { header: 'EAC', key: 'eac', width: 12 }, { header: 'EAC vs ASBL', key: 'eac_vs_asbl', width: 15 },
+                        { header: 'PTD Util %', key: 'ptd_util_perc', width: 12 },
+                        { header: 'EAC vs ASBL %', key: 'eac_vs_asbl_perc', width: 18 }
+                    ];
+                    // 🔥 UPDATED: Adding '%' symbol to values before adding to sheet
+                    typeRows.forEach(r => {
+                        sheet.addRow({
+                            ...r,
+                            ptd_util_perc: `${r.ptd_util_perc}%`,      // Append % symbol
+                            eac_vs_asbl_perc: `${r.eac_vs_asbl_perc}%` // Append % symbol
+                        });
+                    });
+
+                    sheet.getRow(1).eachCell(c => { c.font={bold:true, color:{argb:'FFFFFF'}}; c.fill={type:'pattern', pattern:'solid', fgColor:{argb:'124191'}}; });
+                    
+                    const buffer = await workbook.xlsx.writeBuffer();
+                    const filename = typeRows[0].type_filter; // e.g., AMC_Loa.xlsx
+                    attachmentsList.push({ filename, content: buffer });
+                }
+            }
+
+            if (attachmentsList.length > 0) {
+                // Formatting summary for body table
+                const bodyAlerts = groupData.map(d => ({
+                    customer: d.customer, loa_id: d.loa_id, 
+                    ptd_util_perc: d.ptd_util_perc, eac_vs_asbl_perc: d.eac_vs_asbl_perc
+                }));
+
+                // 🔥 Trigger ONE mail for the whole group
+                await mailService.sendCustomerUtilizationAlert(recipients, recipients[0], bodyAlerts, attachmentsList);
+                console.log(`📧 SUCCESS: One consolidated mail sent to: ${recipients.join(', ')}`);
+            }
+        }
+    } catch (err) {
+        console.error("❌ [CRON ERROR]: BGDM Alerts failed:", err.message);
+    }
 };

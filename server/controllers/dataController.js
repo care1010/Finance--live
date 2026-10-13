@@ -2062,6 +2062,44 @@ exports.getCostViewTable = async (req, res) => {
     } catch (error) { res.status(500).json({ error: error.message }); }
 };
 
+// Percent View Table (Dashboard Quick View)
+exports.getPercentViewTable = async (req, res) => {
+    try {
+        const { type, allowedCustomers } = req.query;
+        const wTArr = getValArray(req.query.wbs_type, req.query, 'wbs_type');
+        
+        const asblCols = getDynamicSumColumns(wTArr, 'asbl');
+        const ncCols = getDynamicNCColumns(wTArr);
+
+        let conditions = ["categories NOT IN ('Not to considered')", "cost_revenue = 'Cost'"];
+        let baseParams = [];
+        
+        // Applying RLS and Global Filters (Sidebar sync)
+        applyRLS(type, allowedCustomers, conditions, baseParams);
+        applyDashboardFilters(req.query, conditions, baseParams);
+        
+        const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        
+        // Base Data aggregation (LOA Level)
+        const baseSql = getDashboardTableSQL('bu, customer, loa_id, loa_name', asblCols, ncCols).replace('{{WHERE_CLAUSE}}', whereSql);
+
+        // 🔥 Formulas Applied: (ptd/asbl)*100 and (eac/asbl)*100
+        const finalSql = `
+            SELECT *,
+                CASE WHEN asbl > 0 THEN ROUND(CAST((ptd / asbl) * 100 AS NUMERIC), 1) ELSE 0.0 END as ptd_util_perc,
+                CASE WHEN asbl > 0 THEN ROUND(CAST((eac / asbl) * 100 AS NUMERIC), 1) ELSE 0.0 END as eac_vs_asbl_perc
+            FROM (${baseSql}) as base_data
+            ORDER BY asbl DESC
+        `;
+
+        const [rows] = await db.query(finalSql, baseParams); 
+        res.json(rows);
+    } catch (error) { 
+        console.error("Percent View column error:", error.message);
+        res.status(500).json({ error: error.message }); 
+    }
+};
+
 exports.getCustomerViewTable = async (req, res) => {
     try {
         const { type, allowedCustomers } = req.query;
@@ -2885,5 +2923,90 @@ exports.getOverspentLOATable = async (req, res) => {
     } catch (error) {
         console.error("Overspent Error:", error.message);
         res.status(500).json({ error: error.message });
+    }
+};
+
+
+
+// 🔥 NAYA: Core logic for BGDM Monthly Alerts with RLS Excel Attachments
+exports.runBGDMAlertsCore = async () => {
+    let mailsSent = 0;
+    try {
+        // 1. Get ALL data that exceeds threshold (Exactly like % View)
+        const sql = `
+            SELECT * FROM (
+                SELECT 
+                    bu, customer, loa_id, loa_name, wbs_type, asbl, ptd, open_commitment, non_committed, eac, eac_vs_asbl,
+                    CASE WHEN asbl > 0 THEN ROUND(CAST((ptd / asbl) * 100 AS NUMERIC), 1) ELSE 0.0 END as ptd_util_perc,
+                    CASE WHEN asbl > 0 THEN ROUND(CAST((eac / asbl) * 100 AS NUMERIC), 1) ELSE 0.0 END as eac_vs_asbl_perc
+                FROM (
+                    -- Yahan getDashboardTableSQL wali aggregation logic internally chalegi
+                    -- (Assumed logic consolidated at LOA level)
+                    ${getDashboardTableSQL('bu, customer, loa_id, loa_name, wbs_type', '(asbl_amc + asbl_project + asbl_warranty)', '(non_committed_editable_amc + non_committed_editable_project + non_committed_editable_warranty)')
+                      .replace('{{WHERE_CLAUSE}}', "WHERE active_inactive = 'Active' AND cost_revenue = 'Cost' AND categories NOT IN ('Not to considered')")}
+                ) as base
+            ) final_t
+            WHERE ptd_util_perc > 80 OR eac_vs_asbl_perc > 100
+        `;
+        const [allCriticalData] = await db.query(sql);
+        if (allCriticalData.length === 0) return 0;
+
+        // 2. Get all BGDM Users and their Customer Mappings
+        const [bgdmMappings] = await db.query(`
+            SELECT DISTINCT u.email, LOWER(TRIM(a.customer)) as assigned_customer
+            FROM users u
+            JOIN access a ON TRIM(LOWER(u.email)) = TRIM(LOWER(a.email))
+            WHERE TRIM(u.user_role) = 'BGDM' AND u.is_active = '1'
+        `);
+
+        const bgdmWorkload = {};
+        bgdmMappings.forEach(m => {
+            if (!bgdmWorkload[m.email]) bgdmWorkload[m.email] = new Set();
+            bgdmWorkload[m.email].add(m.assigned_customer);
+        });
+
+        // 3. Process each BGDM
+        for (const email of Object.keys(bgdmWorkload)) {
+            const allowed = bgdmWorkload[email];
+            const myData = allCriticalData.filter(d => allowed.has(String(d.customer).trim().toLowerCase()));
+
+            if (myData.length === 0) continue;
+
+            const attachments = [];
+            const types = [
+                { label: 'AMC', filter: 'AMC', file: 'AMC_Loa.xlsx' },
+                { label: 'Project', filter: 'Project', file: 'Project_Loa.xlsx' },
+                { label: 'Warranty', filter: 'Warranty/Other', file: 'Warranty_Loa.xlsx' }
+            ];
+
+            for (const t of types) {
+                const typeData = myData.filter(d => String(d.wbs_type).toLowerCase().includes(t.filter.toLowerCase().split('/')[0]));
+                if (typeData.length > 0) {
+                    const workbook = new ExcelJS.Workbook();
+                    const sheet = workbook.addWorksheet('Details');
+                    sheet.columns = [
+                        { header: 'BU', key: 'bu', width: 10 }, { header: 'Customer', key: 'customer', width: 25 },
+                        { header: 'LOA ID', key: 'loa_id', width: 15 }, { header: 'LOA Name', key: 'loa_name', width: 40 },
+                        { header: 'ASBL', key: 'asbl', width: 12 }, { header: 'PTD', key: 'ptd', width: 12 },
+                        { header: 'PTD Util %', key: 'ptd_util_perc', width: 12 },
+                        { header: 'OC', key: 'open_commitment', width: 12 }, { header: 'NC', key: 'non_committed', width: 12 },
+                        { header: 'EAC', key: 'eac', width: 12 }, { header: 'EAC vs ASBL', key: 'eac_vs_asbl', width: 15 },
+                        { header: 'EAC vs ASBL %', key: 'eac_vs_asbl_perc', width: 15 }
+                    ];
+                    typeData.forEach(r => sheet.addRow(r));
+                    sheet.getRow(1).font = { bold: true };
+                    attachments.push({ filename: t.file, content: await workbook.xlsx.writeBuffer() });
+                }
+            }
+
+            if (attachments.length > 0) {
+                await mailService.sendCustomerUtilizationAlert([email], email, myData, attachments);
+                mailsSent++;
+            }
+        }
+        return mailsSent;
+    } catch (err) {
+        console.error("❌ runBGDMAlertsCore Error:", err.message);
+        throw err;
     }
 };
